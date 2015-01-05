@@ -1,4 +1,5 @@
 var gulp = require('gulp');
+var path = require('path');
 
 var gutil = require('gulp-util');
 var plumber = require('gulp-plumber');
@@ -28,21 +29,51 @@ if( productTasks.indexOf(taskName) >= 0 ){
     proEnv = true;
 }
 
-var main = {
-    less: ['layout/less/layout.less'],
-    js: ['lib/app.js']
+var conf = {
+    lessPath: 'layout/less',
+    cssPath: 'layout/css',
+    jsPath: 'lib',
+    less: {
+        file: ['layout*.less'],
+        watch: ['**/*.less']
+    },
+    js: {
+        file: ['app.js'],
+        watch: ['**/*.js'],
+        reload: ['bundle.js']
+    }
 };
 
+for(var i in conf.less){
+    conf.less[i] = conf.less[i].map(function(p){
+        return path.join(conf.lessPath, p);
+    });
+}
+conf.less.reload = path.join(conf.cssPath, 'layout*.css');
+conf.less.dest = conf.cssPath;
+for(var i in conf.js){
+    conf.js[i] = conf.js[i].map(function(p){
+        return path.join(conf.jsPath, p);
+    });
+}
+conf.js.watch.push( '!'+conf.js.reload );
+// console.log(conf);
+
 gulp.task('less', function(){
-    gulp.src( main.less )
+    gulp.src( conf.less.file )
         .pipe( plumber({errorHandler: errHandler}) )
-        .pipe( less({dumpLineNumbers: 'comments'}) )
-        .pipe( gulp.dest('layout/css') );
+        .pipe( cond( proEnv, less({
+            compress: true
+        }), less({
+            dumpLineNumbers: 'comments'
+        })
+        ) )
+        .pipe( gulp.dest( conf.less.dest) );
 });
 
 
 gulp.task('react', function(){
-    gulp.src( main.js )
+    gulp.src( conf.js.file )
         .pipe(plumber({errorHandler: errHandler}))
         .pipe(gbro({
             transform: [reactify, envify],
@@ -50,7 +81,7 @@ gulp.task('react', function(){
         }))
         .pipe( cond(proEnv, uglify()) )
         .pipe(rename('bundle.js'))
-        .pipe(gulp.dest('./lib'));
+        .pipe(gulp.dest( conf.jsPath ));
 });
 
 
@@ -59,15 +90,11 @@ gulp.task('react', function(){
 gulp.task('watch', function(){
     liveReload.listen();
 
-    var less2Watch = ['layout/less/**/*.less'];
-    var less2Reload = ['layout/css/layout*.css'];
-    gulp.watch(less2Watch,  ['less']);
-    gulp.watch(less2Reload, liveReload.changed);
+    gulp.watch(conf.less.watch,  ['less']);
+    gulp.watch(conf.less.reload, liveReload.changed);
 
-    var js2Watch = ['./lib/**/*.js', '!./lib/bundle.js'];
-    var js2Reload = ['./lib/bundle.js'];
-    gulp.watch(js2Watch, ['react']);
-    gulp.watch(js2Reload, liveReload.changed);
+    gulp.watch(conf.js.watch, ['react']);
+    gulp.watch(conf.js.reload, liveReload.changed);
 
 });
 
